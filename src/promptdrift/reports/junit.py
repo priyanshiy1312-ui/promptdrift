@@ -144,3 +144,81 @@ def write_junit_xml(
     tree = ET.ElementTree(root)
     ET.indent(tree, space="  ")
     tree.write(path, encoding="utf-8", xml_declaration=True)
+
+
+def write_junit_report(
+    report: RegressionReport,
+    path: Path,
+) -> None:
+    """Write a JUnit XML report for CI test-result annotations."""
+    total_tests = len(report.tests)
+    total_failures = report.counts["FAIL"]
+
+    total_time = report.duration_ms / 1000
+
+    root = ET.Element(
+        "testsuites",
+        {
+            "name": "promptdrift",
+            "tests": str(total_tests),
+            "failures": str(total_failures),
+            "time": f"{total_time:.3f}",
+        },
+    )
+
+    suite = ET.SubElement(
+        root,
+        "testsuite",
+        {
+            "name": "promptdrift",
+            "tests": str(total_tests),
+            "failures": str(total_failures),
+        },
+    )
+
+    for test in report.tests:
+        testcase = ET.SubElement(
+            suite,
+            "testcase",
+            {
+                "classname": "promptdrift",
+                "name": test.test_id,
+                "time": f"{test.latency_ms / 1000:.3f}",
+            },
+        )
+
+        if test.status == "FAIL":
+            failed_assertions = [
+                evaluation
+                for evaluation in test.evaluations
+                if not evaluation.passed and evaluation.severity == "fail"
+            ]
+
+            if failed_assertions:
+                first_failure = failed_assertions[0]
+
+                failure = ET.SubElement(
+                    testcase,
+                    "failure",
+                    {
+                        "message": _xml_safe_text(first_failure.reason),
+                    },
+                )
+
+                failure.text = (
+                    f"assertion: {_xml_safe_text(first_failure.assertion)}, "
+                    f"expected: {_xml_safe_text(first_failure.expected)}"
+                )
+            else:
+                failure = ET.SubElement(
+                    testcase,
+                    "failure",
+                    {"message": "Test failed"},
+                )
+                failure.text = "Test reported FAIL without a failed assertion."
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    tree = ET.ElementTree(root)
+    ET.indent(tree, space="  ")
+    tree.write(path, encoding="utf-8", xml_declaration=True)

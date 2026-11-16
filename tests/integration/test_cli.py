@@ -482,6 +482,57 @@ class TestJUnitXmlCommand:
         assert suite.attrib["failures"] == "1"
         assert suite.find(".//failure") is not None
 
+    def test_format_junit_uses_default_output_path(self, tmp_path, monkeypatch, multi_test_report):
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(
+            cli,
+            "_run",
+            lambda *args, **kwargs: (None, None, multi_test_report),
+        )
+
+        result = runner.invoke(app, ["test", "--format", "junit"])
+
+        output_path = tmp_path / "promptdrift-results.xml"
+        assert result.exit_code == 1
+        assert output_path.is_file()
+
+        root = ET.parse(output_path).getroot()
+        assert root.tag == "testsuites"
+        assert root.attrib["failures"] == "1"
+
+    def test_format_junit_uses_custom_output_path(self, tmp_path, monkeypatch, multi_test_report):
+        monkeypatch.setattr(
+            cli,
+            "_run",
+            lambda *args, **kwargs: (None, None, multi_test_report),
+        )
+
+        output_path = tmp_path / "reports" / "custom-results.xml"
+
+        result = runner.invoke(
+            app,
+            [
+                "test",
+                "--format",
+                "junit",
+                "--output",
+                str(output_path),
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert output_path.is_file()
+
+        root = ET.parse(output_path).getroot()
+        assert root.tag == "testsuites"
+        assert root.attrib["failures"] == "1"
+
+    def test_invalid_format_is_rejected(self):
+        result = runner.invoke(app, ["test", "--format", "invalid"])
+
+        assert result.exit_code == 2
+        assert "Format must be either" in result.output
+
     def test_check_command_writes_xml_before_failure_exit(
         self, tmp_path, monkeypatch, multi_test_report
     ):

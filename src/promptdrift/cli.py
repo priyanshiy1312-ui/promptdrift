@@ -30,7 +30,13 @@ from .errors import (
     TemplateError,
 )
 from .git import GitContext
-from .reports import print_impact_report, print_report, write_html_report, write_junit_xml
+from .reports import (
+    print_impact_report,
+    print_report,
+    write_html_report,
+    write_junit_report,
+    write_junit_xml,
+)
 from .storage import (
     add_or_update_scenarios,
     get_interactions,
@@ -500,12 +506,28 @@ def test(
         Path | None,
         typer.Option("--junit-xml", help="Write a JUnit XML report."),
     ] = None,
+    output_format: Annotated[
+        str, typer.Option("--format", help="Report format: terminal or junit.")
+    ] = "terminal",
+    output: Annotated[
+        Path | None, typer.Option("--output", help="Output path for JUnit XML.")
+    ] = None,
 ) -> None:
     """Run behavioral contracts; automatically compares an existing baseline."""
+    if output_format not in ("terminal", "junit"):
+        raise typer.BadParameter(
+            "Format must be either 'terminal' or 'junit'.",
+            param_hint="--format",
+        )
+
     result = _run(config, with_baseline=True, verbose=verbose)
     if result:
         if junit_xml is not None:
             write_junit_xml(result[2], junit_xml)
+
+        if output_format == "junit":
+            report_path = output or Path("promptdrift-results.xml")
+            write_junit_report(result[2], report_path)
 
         _emit(result[2], json_output)
 
